@@ -1,17 +1,38 @@
-import asyncio
+import os
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 
-BOT_TOKEN = "7289610239:AAEN-hMd_vD_q_ES6soa1HlcX0186bJo-CA"
-CHANNEL_USERNAME = "@cinema_zone_channel"
+CHANNEL_ID = "@cinema_zone_channel"
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
+    user = update.effective_user
+    chat_id = update.effective_chat.id
+
+    # چک عضویت در کانال
     try:
-        member = await context.bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        member = await context.bot.get_chat_member(CHANNEL_ID, user.id)
         if member.status in ["member", "administrator", "creator"]:
-            await update.message.reply_text("✅ شما عضو کانال هستید.\nلینک فیلم:\nhttps://example.com/movie")
+            await update.message.reply_text("🎬 خوش اومدی! عضو کانال هستی ✅")
         else:
-            await ask_to_join(update)
+            raise Exception("Not a member")
     except:
-        await ask_to
+        keyboard = InlineKeyboardMarkup([
+            [InlineKeyboardButton("📢 عضویت در کانال", url="https://t.me/cinema_zone_channel")]
+        ])
+        await update.message.reply_text(
+            "برای استفاده از ربات باید اول عضو کانال بشی 👇", 
+            reply_markup=keyboard
+        )
+
+def main():
+    TOKEN = os.environ['BOT_TOKEN']
+    app = Application.builder().token(TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, start))  # برای هر پیامی هم همون واکنش
+
+    print("🤖 Bot is running...")
+    app.run_polling()
+
+if __name__ == "__main__":
+    main()
