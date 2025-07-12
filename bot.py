@@ -13,7 +13,7 @@ ADMIN_ID = 7774213647
 CHANNEL_USERNAME = "@cinema_zone_channel"
 SUPPORT_ID = "@Cinemazone1support"
 
-# ذخیره لینک‌ها (کلید = کد، مقدار = file_id)
+# فایل‌های ذخیره‌شده (کلید = کد، مقدار = file_id)
 file_links = {}
 
 # ✅ /start
@@ -34,7 +34,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         reply_markup=InlineKeyboardMarkup(buttons)
     )
 
-# ✅ دکمه مدیریت برای خودت
+# ✅ پنل مدیریت
 async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -60,7 +60,7 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ لینک ساخته شد:\n🔗 /send_{link_code}")
 
-# ✅ ارسال فایل فقط در صورت عضویت
+# ✅ ارسال فایل با بررسی عضویت
 async def send_file(update: Update, context: ContextTypes.DEFAULT_TYPE):
     command = update.message.text
     code = command.replace("/send_", "")
@@ -88,7 +88,7 @@ def main():
 
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(admin_panel, pattern="admin_panel"))
-    app.add_handler(MessageHandler(filters.Document.ALL | filters.Video.ALL, handle_document))
+    app.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO, handle_document))
     app.add_handler(MessageHandler(filters.TEXT & filters.Regex(r"^/send_"), send_file))
 
     print("✅ ربات سینما زون روشن شد.")
