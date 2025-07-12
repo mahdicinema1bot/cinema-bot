@@ -1,65 +1,31 @@
-import logging import os import asyncio from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton from telegram.ext import Application, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
+bot.py - نسخه کامل و بدون ارور ربات تلگرام
 
-برای لاگ‌گیری
+import os import logging import asyncio import nest_asyncio from telegram import Update, InlineKeyboardMarkup, InlineKeyboardButton, InputFile from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, CallbackQueryHandler, ContextTypes, filters
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO) logger = logging.getLogger(name)
+فعال کردن پشتیبانی از اجرای همزمان در asyncio
 
-اطلاعات ربات
+nest_asyncio.apply()
 
-TOKEN = "7289610239:AAH8lsGfH1V--Jc_WnM9dxisAaAeW--Vdvc" ADMIN_ID = 7774213647  # آی‌دی عددی مدیر CHANNEL_USERNAME = "@cinema_zone_channel" SUPPORT_USERNAME = "@Cinemazone1support"
+تنظیمات لاگ
 
-پیام خوش‌آمد و چک عضویت
+logging.basicConfig( format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO ) logger = logging.getLogger(name)
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): user = update.effective_user chat_id = update.effective_chat.id
+توکن ربات و اطلاعات مدیریتی
 
-# چک عضویت
-member = await context.bot.get_chat_member(CHANNEL_USERNAME, user.id)
-if member.status not in ("member", "administrator", "creator"):
-    keyboard = [[InlineKeyboardButton("عضویت در کانال 🎬", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")]]
-    await update.message.reply_text(
-        "🔒 برای استفاده از ربات، ابتدا در کانال عضو شوید سپس دوباره /start را بزنید.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return
+BOT_TOKEN = "7289610239:AAH8lsGfH1V--Jc_WnM9dxisAaAeW--Vdvc" ADMIN_ID = 5094400970 CHANNEL_USERNAME = "@cinema_zone_channel" SUPPORT_USERNAME = "@cinema_support_bot"  # ربات یا کانال پشتیبانی
 
-keyboard = [
-    [InlineKeyboardButton("🎥 ارسال فیلم (مدیر)", callback_data="upload")],
-    [InlineKeyboardButton("🆘 ارتباط با پشتیبانی", callback_data="support")]
-]
-if str(user.id) == str(ADMIN_ID):
-    await update.message.reply_text(f"🎬 خوش آمدی مدیر عزیز!", reply_markup=InlineKeyboardMarkup(keyboard))
-else:
-    await update.message.reply_text(f"🎬 خوش آمدی به ربات سینمایی!", reply_markup=InlineKeyboardMarkup(keyboard))
+دکمه‌های منو اصلی
 
-هندل دکمه‌ها
+def get_main_keyboard(): return InlineKeyboardMarkup([ [InlineKeyboardButton("🎬 فیلم جدید", callback_data="new_movie")], [InlineKeyboardButton("📩 ارتباط با پشتیبانی", url=f"https://t.me/{SUPPORT_USERNAME.lstrip('@')}")] ])
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query user = query.from_user await query.answer()
+بررسی عضویت
 
-# چک عضویت
-member = await context.bot.get_chat_member(CHANNEL_USERNAME, user.id)
-if member.status not in ("member", "administrator", "creator"):
-    keyboard = [[InlineKeyboardButton("عضویت در کانال 🎬", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")]]
-    await query.message.reply_text(
-        "❗️برای ادامه، ابتدا عضو کانال شوید و مجدد /start را بزنید.",
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
-    return
+async def is_member(user_id: int, context: ContextTypes.DEFAULT_TYPE) -> bool: try: member = await context.bot.get_chat_member(CHANNEL_USERNAME, user_id) return member.status in ["member", "administrator", "creator"] except: return False
 
-if query.data == "support":
-    await context.bot.send_message(ADMIN_ID, f"📩 پیام جدید از کاربر @{user.username or user.id}.")
-    await query.message.reply_text("✅ پیام شما به پشتیبانی ارسال شد.")
+شروع
 
-elif query.data == "upload":
-    if str(user.id) == str(ADMIN_ID):
-        await query.message.reply_text("🎬 فایل یا ویدیوی خود را ارسال کنید.")
-    else:
-        await query.message.reply_text("⛔️ فقط مدیر به این بخش دسترسی دارد.")
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): user = update.effective_user if not await is_member(user.id, context): keyboard = InlineKeyboardMarkup([ [InlineKeyboardButton("عضویت در کانال ✅", url=f"https://t.me/{CHANNEL_USERNAME.lstrip('@')}")], [InlineKeyboardButton("🔄 بررسی عضویت", callback_data="check_join")] ]) await update.message.reply_text("برای استفاده از ربات ابتدا در کانال عضو شوید.", reply_markup=keyboard) return await update.message.reply_text(f"سلام {user.first_name}!\nبه ربات سینما خوش اومدی 🍿", reply_markup=get_main_keyboard())
 
-ذخیره فایل و ساخت لینک اشتراک
+بررسی دکمه عضویت
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE): user = update.effective_user if str(user.id) != str(ADMIN_ID): return file = update.message.document or update.message.video if not file: return file_id = file.file_id # ساخت لینک اختصاصی دریافت فایل link = f"https://t.me/{context.bot.username}?start={file_id}" await update.message.reply_text(f"✅ لینک اختصاصی: {link}") context.bot_data[file_id] = file_id
-
-ارسال فایل برای کسانی که لینک را دارند
-
-async def send_file_by_link
-
+async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query user_id =
