@@ -1,164 +1,71 @@
-import asyncio
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
+import asyncio import logging import os from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update from telegram.ext import ( Application, CommandHandler, MessageHandler, CallbackQueryHandler, filters, ContextTypes )
 
-TOKEN = "7289610239:AAH8lsGfH1V--Jc_WnM9dxisAaAeW--Vdvc"
-CHANNEL_USERNAME = "@CinemaZone1"
-SUPPORT_ID = 7774213647
-SUPPORT_USERNAME = "Cinemazone1support"
+========================= تنظیمات =========================
 
-REQUIRED_CHANNEL_POSTS = [1, 2, 3, 4, 5]
+BOT_TOKEN = "7289610239:AAH8lsGfH1V--Jc_WnM9dxisAaAeW--Vdvc" ADMIN_ID = 7774213647 CHANNEL_ID = "@Cinemazone1" SUPPORT_ID = "@Cinemazone1support"
 
-def main_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("عضویت در کانال", url=f"https://t.me/{CHANNEL_USERNAME[1:]}")],
-        [InlineKeyboardButton("ارتباط با پشتیبانی", callback_data="support")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+========================= لاگ‌گیری =========================
 
-def admin_menu_keyboard():
-    keyboard = [
-        [InlineKeyboardButton("آپلود فیلم جدید", callback_data="upload")],
-        [InlineKeyboardButton("بازگشت", callback_data="back")],
-    ]
-    return InlineKeyboardMarkup(keyboard)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO) logger = logging.getLogger(name)
 
-def back_keyboard():
-    return InlineKeyboardMarkup([[InlineKeyboardButton("بازگشت", callback_data="back")]])
+========================= بررسی عضویت =========================
 
-async def check_membership(user_id: int, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        member = await context.bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in ["member", "administrator", "creator"]
-    except:
-        return False
+async def is_user_member(user_id: int, context: ContextTypes.DEFAULT_TYPE): try: member = await context.bot.get_chat_member(chat_id=CHANNEL_ID, user_id=user_id) return member.status in ("member", "creator", "administrator") except: return False
 
-async def check_reactions(user_id: int, context: ContextTypes.DEFAULT_TYPE):
-    # این قسمت باید با دیتابیس یا روش دیگه چک بشه، اینجا فرضی True هست
-    return True
+========================= استارت =========================
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if await check_membership(user_id, context):
-        await update.message.reply_text(
-            "سلام! خوش آمدید.\nبرای دریافت فیلم‌ها از منوی زیر استفاده کنید.",
-            reply_markup=main_menu_keyboard()
-        )
-    else:
-        await update.message.reply_text(
-            "برای استفاده از ربات ابتدا باید عضو کانال ما شوید.",
-            reply_markup=main_menu_keyboard()
-        )
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE): user_id = update.effective_user.id if not await is_user_member(user_id, context): keyboard = [[InlineKeyboardButton("✅ عضویت در کانال", url=f"https://t.me/{CHANNEL_ID[1:]}")], [InlineKeyboardButton("🔄 بررسی عضویت", callback_data="check_membership")]] await update.message.reply_text("👋 خوش اومدی! برای استفاده از ربات ابتدا در کانال عضو شو:", reply_markup=InlineKeyboardMarkup(keyboard)) return
 
-async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    user_id = query.from_user.id
-    await query.answer()
+keyboard = [
+    [InlineKeyboardButton("🎥 ارسال فیلم (فقط مدیریت)", callback_data="upload_film")],
+    [InlineKeyboardButton("📞 ارتباط با پشتیبانی", callback_data="support")]
+]
+if user_id == ADMIN_ID:
+    await update.message.reply_text("🎬 به پنل مدیریت خوش اومدی:", reply_markup=InlineKeyboardMarkup(keyboard))
+else:
+    await update.message.reply_text("✅ شما عضو کانال هستی. خوش آمدی!", reply_markup=InlineKeyboardMarkup(keyboard))
 
-    if query.data == "support":
-        if await check_membership(user_id, context):
-            await context.bot.send_message(
-                chat_id=SUPPORT_ID,
-                text=f"کاربر [{query.from_user.full_name}](tg://user?id={user_id}) درخواست پشتیبانی داده است.",
-                parse_mode="Markdown"
-            )
-            await query.message.reply_text("پیام شما به پشتیبانی ارسال شد. منتظر پاسخ باشید.", reply_markup=back_keyboard())
-        else:
-            await query.message.reply_text(
-                "برای استفاده از این امکان ابتدا باید عضو کانال شوید.",
-                reply_markup=main_menu_keyboard()
-            )
-    elif query.data == "upload":
-        if user_id == SUPPORT_ID:
-            await query.message.reply_text("لطفا فیلم یا فایل خود را ارسال کنید.", reply_markup=back_keyboard())
-            context.user_data["upload_mode"] = True
-        else:
-            await query.message.reply_text("شما دسترسی لازم را ندارید.", reply_markup=back_keyboard())
-    elif query.data == "back":
-        if user_id == SUPPORT_ID:
-            await query.message.reply_text("منوی مدیریت", reply_markup=admin_menu_keyboard())
-        else:
-            await query.message.reply_text("منوی اصلی", reply_markup=main_menu_keyboard())
+========================= چک عضویت =========================
 
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if user_id != SUPPORT_ID:
-        await update.message.reply_text("شما اجازه ارسال فایل ندارید.")
-        return
-    if not context.user_data.get("upload_mode", False):
-        await update.message.reply_text("ابتدا روی دکمه 'آپلود فیلم جدید' کلیک کنید.")
-        return
+async def check_membership(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() user_id = query.from_user.id
 
-    file = update.message.document or update.message.video
-    if not file:
-        await update.message.reply_text("لطفا فقط فایل ویدیویی یا داکیومنت ارسال کنید.")
-        return
+if await is_user_member(user_id, context):
+    await query.edit_message_text("✅ عضویت شما تایید شد. مجدداً /start را بزنید.")
+else:
+    await query.edit_message_text("❌ هنوز عضو نشدی! لطفاً عضو شو و دوباره امتحان کن.")
 
-    file_id = file.file_id
-    file_name = file.file_name if hasattr(file, "file_name") else "فیلم شما"
+========================= ارتباط با پشتیبانی =========================
 
-    file_link = f"https://t.me/{context.bot.username}?start={file_id}"
-    context.user_data["upload_mode"] = False
+async def support(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query user_id = query.from_user.id if not await is_user_member(user_id, context): await query.answer() await query.edit_message_text("❌ ابتدا در کانال عضو شوید سپس مجدداً /start را بزنید.") return await query.answer() await context.bot.send_message(chat_id=ADMIN_ID, text=f"📩 پیام جدید از @{query.from_user.username or user_id}") await query.edit_message_text("📬 پیام خود را همین‌جا بفرستید. پشتیبان به زودی پاسخ می‌دهد.")
 
-    await update.message.reply_text(f"فیلم با موفقیت آپلود شد.\nلینک برای ارسال به کاربران:\n{file_link}")
+========================= هندل پیام‌های پشتیبانی =========================
 
-async def get_film(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not await check_membership(user_id, context):
-        await update.message.reply_text(
-            "برای دریافت فیلم ابتدا باید عضو کانال شوید.",
-            reply_markup=main_menu_keyboard()
-        )
-        return
+async def forward_to_admin(update: Update, context: ContextTypes.DEFAULT_TYPE): if update.message.from_user.id != ADMIN_ID: await context.bot.send_message(chat_id=ADMIN_ID, text=f"✉️ پیام از @{update.message.from_user.username}: {update.message.text}") await update.message.reply_text("✅ پیام شما به پشتیبانی ارسال شد.") else: await update.message.reply_text("📌 این پیام از طرف مدیریت است.")
 
-    if not await check_reactions(user_id, context):
-        await update.message.reply_text(
-            "برای دریافت فیلم ابتدا باید حداقل 5 ری‌اکشن روی پست‌های کانال بدهید.",
-            reply_markup=main_menu_keyboard()
-        )
-        return
+========================= مدیریت: دریافت فیلم و ساخت لینک =========================
 
-    args = context.args
-    if not args:
-        await update.message.reply_text("لینک فیلم موجود نیست.")
-        return
+user_videos = {}
 
-    file_id = args[0]
+async def upload_film(update: Update, context: ContextTypes.DEFAULT_TYPE): query = update.callback_query await query.answer() if query.from_user.id != ADMIN_ID: await query.edit_message_text("❌ فقط مدیریت می‌تواند فیلم آپلود کند.") return await query.edit_message_text("📤 لطفاً فیلم را ارسال کنید.")
 
-    await update.message.reply_text(
-        f"فیلم آماده است:\nبرای مشاهده روی لینک زیر کلیک کنید:\nhttps://t.me/{context.bot.username}?start={file_id}",
-        reply_markup=main_menu_keyboard()
-    )
+async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE): if update.message.from_user.id != ADMIN_ID: return message = await update.message.reply_text("✅ لینک فیلم ساخته شد. به کاربران بده:") user_videos[update.message.message_id] = update.message await update.message.reply_text(f"🎬 برای دیدن فیلم، ابتدا عضو کانال شوید و سپس /start را بزنید.")
 
-    msg = await update.message.reply_text("این پیام پس از ۳۰ ثانیه حذف خواهد شد.")
-    await asyncio.sleep(30)
-    try:
-        await msg.delete()
-    except:
-        pass
+========================= اجرای اصلی =========================
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("برای شروع /start را بزنید.")
+async def main(): application = Application.builder().token(BOT_TOKEN).build()
 
-async def unknown_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("دستور ناشناخته. لطفا /start را بزنید.")
+application.add_handler(CommandHandler("start", start))
+application.add_handler(CallbackQueryHandler(check_membership, pattern="check_membership"))
+application.add_handler(CallbackQueryHandler(support, pattern="support"))
+application.add_handler(CallbackQueryHandler(upload_film, pattern="upload_film"))
+application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, forward_to_admin))
+application.add_handler(MessageHandler(filters.Document.ALL | filters.Video.ALL, handle_document))
 
-async def main():
-    application = Application.builder().token(TOKEN).build()
+# اجرای ربات
+await application.initialize()
+await application.start()
+await application.updater.start_polling()
+await application.updater.idle()
 
-    application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("getfilm", get_film))
-    application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.Document.ALL | filters.VIDEO, handle_document))
-    application.add_handler(MessageHandler(filters.COMMAND, unknown_command))
+if name == 'main': import nest_asyncio nest_asyncio.apply() asyncio.run(main())
 
-    await application.run_polling()
-
-if __name__ == "__main__":
-    try:
-        loop = asyncio.get_event_loop()
-        loop.create_task(main())
-        loop.run_forever()
-    except RuntimeError:
-        asyncio.run(main())
